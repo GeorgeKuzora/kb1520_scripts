@@ -1,1 +1,3 @@
 Excel/
+/dist/
+/*.egg-info
