@@ -12,12 +12,12 @@ class Data_list:
         self.plant_file = plant_file
         self.zparts_file = zparts_file
         self.product_file = product_file
-        self.data_df = None
-        self.basic_df = None
-        self.plant_df = None
-        self.zparts_df = None
-        self.product_df = None
-        self.components_df = None
+#        self.data_df = None
+#        self.basic_df = None
+#        self.plant_df = None
+#        self.zparts_df = None
+#        self.product_df = None
+#        self.components_df = None
 
     def create_basic(self):
         '''Создает датафрейм из листа Эксель'''
@@ -43,7 +43,7 @@ class Data_list:
             self.product_df = pd.read_excel(xlsx, "product_query", na_values=["NA"], index_col=0, usecols="A:K")
         return self.product_df
 
-    def connect_material(self):
+    def connect_components(self):
         '''Соединяет два датафрейма и получает датафрейм с данными о используемых компонентах'''
         frames = [self.basic_df, self.plant_df]
         self.components_df = pd.concat(
@@ -71,16 +71,48 @@ class Data_list:
                                 indicator=False,
                                 validate=None,
                                 )
+        self.repairs_df = pd.merge(
+                                self.repairs_df,
+                                self.components_df,
+                                how="left",
+                                on=None,
+                                left_on="Component",
+                                right_on="B~MATNR",
+                                left_index=False,
+                                right_index=True,
+                                sort=False,
+                                suffixes=("_x", "_y"),
+                                copy=True,
+                                indicator=False,
+                                validate=None,
+                                )
         return self.repairs_df
 
+    def connect_service(self):
+        '''Соединяет два датафрейма и получает датафрейм с данными о проведенных ремонтах и расходе материалов'''
+        self.service_df = pd.merge(
+                                self.product_df,
+                                self.basic_df,
+                                how="left",
+                                on=None,
+                                left_on="Material entered",
+                                right_on="B~MATNR",
+                                left_index=False,
+                                right_index=True,
+                                sort=False,
+                                suffixes=("_x", "_y"),
+                                copy=True,
+                                indicator=False,
+                                validate=None,
+                                )
+        return self.service_df
 
 class User_data:
     '''Класс для загрузки и обработки данных загружаеммых пользователем, а именно ВОМ материала. Принимает в качестве атрибута имя файла со списком материалов. Требует очистки данных пользователя'''
 
-    def __init__(self, file_name):
+    def __init__(self, file_name, components_df):
         self.file_name = file_name
-        self.upload_list = []
-        self.user_df = None
+        self.components_df = components_df
 
     def create_df(self):
         '''Этот метод создает датафрейм pandas и расчитывает реальное количество компонентов в листе материалов. Реальное количество компонентов расчитывается на основании структуры уровней материалов входящих друг в друга и их количеств. Для расчета использована структура stack.''' 
@@ -109,26 +141,46 @@ class User_data:
         self.user_df["True quantity"] = (self.user_df["Quantity"] * self.user_df["Multiply"])
         return self.user_df
 
+    def connect_df(self):
+        self.user_df = pd.merge(
+                                self.user_df,
+                                self.basic_df,
+                                how="left",
+                                on=None,
+                                left_on="Number",
+                                right_on="B~MATNR",
+                                left_index=False,
+                                right_index=True,
+                                sort=False,
+                                suffixes=("_x", "_y"),
+                                copy=True,
+                                indicator=False,
+                                validate=None,
+                                )
+        return self.user_df
+
+
     
 if __name__ == '__main__':
 
-#    a = Data_list(
-#            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/basic_query.xlsx",
-#            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/plant_query.xlsx",
-#            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/zparts_query.xlsx",
-#            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/product_query.xlsx",
-#            )
-#    a.create_basic()
-#    a.create_plant()
-#    a.create_zparts()
-#    a.create_product()
-#
-#    print(a.zparts_df)
-#    print(a.product_df)
-#    a.connect_repairs()
-#
-#    print(a.repairs_df)
+    a = Data_list(
+            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/basic_query.xlsx",
+            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/plant_query.xlsx",
+            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/zparts_query.xlsx",
+            "/home/georgiy/Documents/Code/kb1520_app/Excel/data/query/product_query.xlsx",
+            )
+    a.create_basic()
+    a.create_plant()
+    a.create_zparts()
+    a.create_product()
 
-    b = User_data("/home/georgiy/Documents/Code/kb1520_app/Excel/II78917_2_O.xlsx")
-    b.create_df()
-    print(b.user_df)
+    print(a.zparts_df)
+    print(a.product_df)
+    a.connect_components()
+    a.connect_repairs()
+
+    print(a.repairs_df)
+
+#    b = User_data("/home/georgiy/Documents/Code/kb1520_app/Excel/II78917_2_O.xlsx")
+#    b.create_df()
+#    print(b.user_df)
