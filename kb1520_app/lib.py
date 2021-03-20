@@ -8,7 +8,7 @@ import openpyxl
 class Data_list:
     '''Класс для загузки данных о расходе материалов в прошлом и существующих
     компонентах и их свойствах. Требует подготовленных и очищенных данных в формате .xlsx.'''
-    
+
     def __init__(self, basic_file):
         '''Атрибут имя файла .xlsx где храняться данные разделенные по вкладкам,
         сформированныи при промощи Powerquery'''
@@ -43,7 +43,7 @@ class User_data:
     def create_df(self):
         '''Этот метод создает датафрейм для материалов входящих в БОМ для которого
         производится расчет потребностей, и расчитывает реальное количество
-        компонентов в листе материалов.''' 
+        компонентов в листе материалов.'''
 
         with pd.ExcelFile(self.file_name) as xlsx:
             df = pd.read_excel(xlsx, "Default", usecols="A:J")
@@ -63,7 +63,7 @@ class User_data:
             except KeyError:
                 pass
             mult = np.prod(mult_index)
-            mult_list.append(mult)   
+            mult_list.append(mult)
         multiply = pd.Series(mult_list, name="Multiply")
         self.user_df = pd.concat([df, multiply], axis=1)
         self.user_df["True quantity"] = (self.user_df["Quantity"] * self.user_df["Multiply"])
@@ -71,23 +71,23 @@ class User_data:
 
     def create_prdinfo(self):
         '''Создает датафрейм данных о ремонтируемом продукте из листа Эксель,
-        загружаемого пользователем. Данные о продукте вносятся пользователем во 
+        загружаемого пользователем. Данные о продукте вносятся пользователем во
         вкладку info'''
         with pd.ExcelFile(self.file_name) as xlsx:
-            self.prdinfo_df = pd.read_excel(xlsx, "info", na_values=["NA"], index_col=0, usecols="A:C")
+            self.prdinfo_df = pd.read_excel(xlsx, "info", na_values=["NA"], usecols="A:C")
         return self.prdinfo_df
 
-    def create_coef_array(self):
+    def create_coef_array(self, coef):
         '''Добавляет расчитанный для объекта компонента, входящего в лист с
         пользовательскими данными, через который идет итерация, в лист для
         последующего добвавления к данным'''
-        self.coef_array.append(Complete_df.calculate_coef(self))
-    
+        self.coef_array.append(coef)
+
     def coef_arr_concat(self):
         '''Присоединяет лист к добавленными коэффициентами к основному дата фрейму
         пользовательских данных'''
         coef_arr_s = pd.Series(self.coef_array, name="Coef")
-        self.user_df = pd.concat([df, coef_arr_s], axis=1)
+        self.user_df = pd.concat([self.user_df, coef_arr_s], axis=1)
         return self.user_df
 
     def print_df(self):
@@ -113,10 +113,10 @@ class Material_obj:
         self.data_db_name = data_db_name
 
     def prepare_objdata(self):
-        '''Метод создает новый объект в формате pd.df, из строки заданных данных 
+        '''Метод создает новый объект в формате pd.df, из строки заданных данных
         пользователя (либо одна строка для продукта, либо строка через которую
         проходит итерация для компонента'''
-        self.objdata_df = user_db_name.iloc(self.index)
+        self.objdata_df = self.user_db_name.iloc[[self.index],:]
         return self.objdata_df
 
     def create_obj(self):
@@ -147,12 +147,13 @@ class Component_obj(Material_obj):
     def rename_obj(self):
         '''Метод переименовывает необходимые столбцы в датафрейме компонента,
         для дальнейшего удобства'''
-        self.obj_df.rename({"Number": "Component",
+        self.objr_df = self.obj_df.rename({"Number": "Component",
                             "Material type": "Component material type",
                             "Material COC": "Component COC",
                             "Material shelf life": "Component shelf life",
                             "Material description": "Component description"}, axis="columns")
-        return self.obj_df
+        self.objri_df = self.objr_df.reset_index(drop=True)
+        return self.objri_df
 
 class Product_obj(Material_obj):
     '''Класс дочерний к классу материала, нужен для создания конкретного объекта
@@ -161,19 +162,19 @@ class Product_obj(Material_obj):
     def rename_obj(self):
         '''Метод переименовывает необходимые столбцы в датафрейме продукта,
         для дальнейшего удобства'''
-        self.obj_df.rename({"Number": "Product",
+        self.objr_df = self.obj_df.rename({"Number": "Product",
                             "Material type": "Product material type",
                             "Material COC": "Product COC",
                             "Material shelf life": "Product shelf life",
                             "Material description": "Product description"}, axis="columns")
-        return self.obj_df
-        
+        return self.objr_df
+
 
 class Complete_df:
     '''Класс для окончательного расчета данных о коэффициенте для каждого из
     компонентов в пользовательских данных, обладает атрибутом класса - словарем
     с данными о названиях столбцов через которые будет идти расширение выборки'''
-    spec_dict = {1: ("Component", "Service material"),
+    SPEC_DICT = {1: ("Component", "Service material"),
                  2: ("Component", "Product"),
                  3: ("Component", "Product description"),
                  4: ("Component", "Product material type"),
@@ -182,7 +183,9 @@ class Complete_df:
                  7: ("Component description", "Product"),
                  8: ("Component description", "Product description"),
                  9: ("Component description", "Product material type"),
-                 10: ("Component description", "Product COC")
+                 10: ("Component description", "Product COC"),
+                 11: ("Component material type", "Product COC"),
+                 12: ("Component COC", "Product COC")
                 }
 
     def __init__(self, zparts_df, component_obj, product_obj):
@@ -199,7 +202,7 @@ class Complete_df:
         '''Метод соединяет объеты компонента и продукта в один датафрейм,
         для того чтобы было проще создавать выборку из данных о ремонтах'''
         frames = [self.component_obj, self.product_obj]
-        self.joined_obj = pd.concat(frames, axis=1)
+        self.joined_obj = pd.concat([self.component_obj, self.product_obj], axis=1)
         return self.joined_obj
 
     def create_query(self):
@@ -207,11 +210,14 @@ class Complete_df:
         каждой из итераций создает выборку с данными о ремонтах продуктов и
         колличестве потребленного компонента в данных ремонтах. При наличии более
         20 ремонтов в выборке, возвращает созданную на данном шаге выборку.'''
-        for key: value in spec_dict:
-            current_frame = self.joined_obj[value]
-            current_dict = current_frame.to_dict('records')
-            self.current_query = self.zparts_df[(self.zparts_df[value[0]] == current_dict[value[0]]) & (self.zparts_df[value[1]] == current_dict[value[1]])]
-            sum_qb = current_query["Quantity Balance"].sum()
+        for key, value in self.SPEC_DICT.items():
+            #current_frame = self.joined_obj[:, value]
+            component_id = self.joined_obj.at[0, value[0]]
+            product_id = self.joined_obj.at[0, value[1]]
+            #if component_id is None:
+            #   self.current_query = self.zparts_df[(self.zparts_df[value[1]] == product_id)]
+            self.current_query = self.zparts_df[(self.zparts_df[value[0]] == component_id) & (self.zparts_df[value[1]] == product_id)]
+            sum_qb = self.current_query["Quantity Balance"].sum()
             if sum_qb >= 20:
                 break
         return self.current_query
@@ -220,12 +226,12 @@ class Complete_df:
         '''Расчитывает коэффициент на основании данных о расходе коэффициента,
         в случае если потребления материалов не случилось для данных ремонтов,
         расчитывает на основании существующих коэффициентов'''
-        if self.current_query["C_consum"].sum() == 0:
-            self.coef = self.current_query["C quantity"].min()
+        if self.current_query["C Consum"].sum(axis=0, skipna=False) == 0:
+            self.coef = self.current_query["C quantity"].min(axis=0, skipna=False)
         else:
-            self.coef = self.current_query["Prob_C"].mean()
+            self.coef = self.current_query["Prob_C"].mean(axis=0, skipna=False)
         return self.coef
-            
+
 
 
 
