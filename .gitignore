@@ -3,3 +3,6 @@ Excel/
 /*.egg-info
 /*.xlsx
 /*.pyc
+**/*.xlsx
+**/*.pyc
+**/*.egg-info
