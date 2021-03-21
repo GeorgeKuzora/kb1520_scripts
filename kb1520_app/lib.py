@@ -185,7 +185,8 @@ class Complete_df:
                  9: ("Component description", "Product material type"),
                  10: ("Component description", "Product COC"),
                  11: ("Component material type", "Product COC"),
-                 12: ("Component COC", "Product COC")
+                 12: ("Component COC", "Product COC"),
+                 13: ()
                 }
 
     def __init__(self, zparts_df, component_obj, product_obj):
@@ -211,12 +212,24 @@ class Complete_df:
         колличестве потребленного компонента в данных ремонтах. При наличии более
         20 ремонтов в выборке, возвращает созданную на данном шаге выборку.'''
         for key, value in self.SPEC_DICT.items():
-            #current_frame = self.joined_obj[:, value]
-            component_id = self.joined_obj.at[0, value[0]]
-            product_id = self.joined_obj.at[0, value[1]]
-            #if component_id is None:
-            #   self.current_query = self.zparts_df[(self.zparts_df[value[1]] == product_id)]
-            self.current_query = self.zparts_df[(self.zparts_df[value[0]] == component_id) & (self.zparts_df[value[1]] == product_id)]
+            component_id = None
+            product_id = None
+            try:
+                component_id = self.joined_obj.at[0, value[0]]
+            except (IndexError, KeyError):
+                pass
+            try:
+                product_id = self.joined_obj.at[0, value[1]]
+            except (IndexError, KeyError):
+                pass
+            if component_id is None and product_id is not None:
+                self.current_query = self.zparts_df[(self.zparts_df[value[1]] == product_id)]
+            elif product_id is None and component_id is not None:
+                self.current_query = self.zparts_df[(self.zparts_df[value[0]] == component_id)]
+            elif product_id is None and component_id is None:
+                self.current_query = self.zparts_df
+            else:
+                self.current_query = self.zparts_df[(self.zparts_df[value[0]] == component_id) & (self.zparts_df[value[1]] == product_id)]
             sum_qb = self.current_query["Quantity Balance"].sum()
             if sum_qb >= 20:
                 break
@@ -226,13 +239,15 @@ class Complete_df:
         '''Расчитывает коэффициент на основании данных о расходе коэффициента,
         в случае если потребления материалов не случилось для данных ремонтов,
         расчитывает на основании существующих коэффициентов'''
-        if self.current_query["C Consum"].sum(axis=0, skipna=False) == 0:
-            self.coef = self.current_query["C quantity"].min(axis=0, skipna=False)
+        sum_qua_bal = self.current_query["Quantity Balance"].sum(axis=0, skipna=False)
+        sum_c_con = self.current_query["C Consum"].sum(axis=0, skipna=False)
+        if sum_c_con == 0 or sum_c_con is None:
+            self.coef = self.current_query["C quantity"].min(axis=0)
+            if self.coef == 0:
+                self.coef = 0.01
         else:
-            self.coef = self.current_query["Prob_C"].mean(axis=0, skipna=False)
+            self.coef = sum_c_con / sum_qua_bal
         return self.coef
-
-
 
 
 if __name__ == '__main__':
