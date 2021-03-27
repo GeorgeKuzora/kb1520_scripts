@@ -18,14 +18,14 @@ class Data_list:
         '''Создает датафрейм из листа Эксель в котором содержатся данные о
         существующих материалах и их свойствах.'''
         with pd.ExcelFile(self.basic_file) as xlsx:
-            self.materials_df = pd.read_excel(xlsx, "materials_combined", na_values=["NA"], index_col=0, usecols="A:E")
+            self.materials_df = pd.read_excel(xlsx, "material_data", na_values=["NA"], index_col=0, usecols="A:E")
         return self.materials_df
 
     def create_zparts(self):
         '''Создает датафрейм из листа Эксель в котором содержаться данные о
         произведенных ремонтах и расходе материалов в этих ремонтах.'''
         with pd.ExcelFile(self.basic_file) as xlsx:
-            self.zparts_df = pd.read_excel(xlsx, "zparts_combined", na_values=["NA"], usecols="A:U")
+            self.zparts_df = pd.read_excel(xlsx, "zparts_combined", na_values=["NA"], usecols="A:Z")
         return self.zparts_df
 
 
@@ -39,6 +39,9 @@ class User_data:
         сформированныи при промощи Powerquery'''
         self.file_name = file_name
         self.coef_array = []
+        self.key_id = []
+        self.date_id = []
+        self.sum_id = []
 
     def create_df(self):
         '''Этот метод создает датафрейм для материалов входящих в БОМ для которого
@@ -77,22 +80,31 @@ class User_data:
             self.prdinfo_df = pd.read_excel(xlsx, "info", na_values=["NA"], usecols="A:C")
         return self.prdinfo_df
 
-    def create_coef_array(self, coef):
+    def create_coef_array(self, coef, key, date, sum_qb):
         '''Добавляет расчитанный для объекта компонента, входящего в лист с
         пользовательскими данными, через который идет итерация, в лист для
         последующего добвавления к данным'''
         self.coef_array.append(coef)
+        self.key_id.append(key)
+        self.date_id.append(date)
+        self.sum_id.append(sum_qb)
 
     def coef_arr_concat(self):
         '''Присоединяет лист к добавленными коэффициентами к основному дата фрейму
         пользовательских данных'''
         coef_arr_s = pd.Series(self.coef_array, name="Coef")
+        key_id_s = pd.Series(self.key_id, name="Key_id")
+        date_id_s = pd.Series(self.date_id, name="Date_id")
+        sum_id_s = pd.Series(self.sum_id, name="Sum_id")
         self.user_df = pd.concat([self.user_df, coef_arr_s], axis=1)
+        self.user_df = pd.concat([self.user_df, key_id_s], axis=1)
+        self.user_df = pd.concat([self.user_df, date_id_s], axis=1)
+        self.user_df = pd.concat([self.user_df, sum_id_s], axis=1)
         return self.user_df
 
     def print_df(self):
         '''Записывает пользовательский датафрейм в новый эксель файл'''
-        self.user_df.to_excel("true_" + self.file_name, sheet_name="BOM")
+        self.user_df.to_excel("true_" + self.file_name, sheet_name="BOM", index=False)
 
 
 class Material_obj:
@@ -148,7 +160,7 @@ class Component_obj(Material_obj):
         '''Метод переименовывает необходимые столбцы в датафрейме компонента,
         для дальнейшего удобства'''
         self.objr_df = self.obj_df.rename({"Number": "Component",
-                            "Material type": "Component material type",
+                            "Material material group": "Component material group",
                             "Material COC": "Component COC",
                             "Material shelf life": "Component shelf life",
                             "Material description": "Component description"}, axis="columns")
@@ -163,7 +175,7 @@ class Product_obj(Material_obj):
         '''Метод переименовывает необходимые столбцы в датафрейме продукта,
         для дальнейшего удобства'''
         self.objr_df = self.obj_df.rename({"Number": "Product",
-                            "Material type": "Product material type",
+                            "Material material group": "Product material group",
                             "Material COC": "Product COC",
                             "Material shelf life": "Product shelf life",
                             "Material description": "Product description"}, axis="columns")
@@ -177,17 +189,27 @@ class Complete_df:
     SPEC_DICT = {1: ("Component", "Service material"),
                  2: ("Component", "Product"),
                  3: ("Component", "Product description"),
-                 4: ("Component", "Product material type"),
+                 4: ("Component", "Product material group"),
                  5: ("Component", "Product COC"),
-                 6: ("Component description", "Service material"),
-                 7: ("Component description", "Product"),
-                 8: ("Component description", "Product description"),
-                 9: ("Component description", "Product material type"),
-                 10: ("Component description", "Product COC"),
-                 11: ("Component material type", "Product COC"),
-                 12: ("Component COC", "Product COC"),
-                 13: ()
+                 6: ("Component", None),
+                 7: ("Component description", "Service material"),
+                 8: ("Component description", "Product"),
+                 9: ("Component description", "Product description"),
+                 10: ("Component description", "Product material group"),
+                 11: ("Component description", "Product COC"),
+                 12: ("Component description", None),
+                 13: ("Component material group", "Service material"),
+                 14: ("Component material group", "Product"),
+                 15: ("Component material group", "Product description"),
+                 16: ("Component marerial group", "Product material group"),
+                 17: ("Component material group", "Product COC"),
+                 18: ("Component COC", "Service material"),
+                 19: ("Component COC", "Product"),
+                 20: ("Component COC", "Product description"),
+                 21: ("Component COC", "Product material group"),
+                 22: ("Component COC", "Product COC")
                 }
+    DATE_ARR = (2021, 2020, 2019, 2018, 2017, 2016, 2015)
 
     def __init__(self, zparts_df, component_obj, product_obj):
         '''Атрибуты:
@@ -198,6 +220,7 @@ class Complete_df:
         self.zparts_df = zparts_df
         self.component_obj = component_obj
         self.product_obj = product_obj
+        #self.key_id = None
 
     def join_obj(self):
         '''Метод соединяет объеты компонента и продукта в один датафрейм,
@@ -222,16 +245,24 @@ class Complete_df:
                 product_id = self.joined_obj.at[0, value[1]]
             except (IndexError, KeyError):
                 pass
-            if component_id is None and product_id is not None:
-                self.current_query = self.zparts_df[(self.zparts_df[value[1]] == product_id)]
-            elif product_id is None and component_id is not None:
-                self.current_query = self.zparts_df[(self.zparts_df[value[0]] == component_id)]
-            elif product_id is None and component_id is None:
-                self.current_query = self.zparts_df
-            else:
-                self.current_query = self.zparts_df[(self.zparts_df[value[0]] == component_id) & (self.zparts_df[value[1]] == product_id)]
-            sum_qb = self.current_query["Quantity Balance"].sum()
+            for date in self.DATE_ARR:
+                date_df = self.zparts_df[(self.zparts_df["Date"] >= date)]
+                if component_id is None and product_id is not None:
+                    self.current_query = date_df[(date_df[value[1]] == product_id)]
+                elif product_id is None and component_id is not None:
+                    self.current_query = date_df[(date_df[value[0]] == component_id)]
+                elif product_id is None and component_id is None:
+                    self.current_query = date_df
+                else:
+                    self.current_query = date_df[(date_df[value[0]] == component_id)
+                                                        & (date_df[value[1]] == product_id)]
+                sum_qb = self.current_query["Quantity Balance"].sum()
+                if sum_qb >= 20:
+                    self.calculate_date(date)
+                    break
             if sum_qb >= 20:
+                self.calculate_key_id(key)
+                self.calculate_sum(sum_qb)
                 break
         return self.current_query
 
@@ -249,6 +280,17 @@ class Complete_df:
             self.coef = sum_c_con / sum_qua_bal
         return self.coef
 
+    def calculate_key_id(self, key):
+        self.key_id = key
+        return self.key_id
+
+    def calculate_date(self, date):
+        self.date_id = date
+        return self.date_id
+
+    def calculate_sum(self, sum_qb):
+        self.sum_id = sum_qb
+        return self.sum_id
 
 if __name__ == '__main__':
     pass

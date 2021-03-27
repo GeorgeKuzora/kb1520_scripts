@@ -24,8 +24,9 @@ for i in range(len(user_list)):
     complete_df = lib.Complete_df(zparts_list, component_obj, product_obj)
     complete_df.join_obj()
     complete_df.create_query()
-    coef = complete_df.calculate_coef()
-    user_data.create_coef_array(coef)
+    complete_df.calculate_coef()
+    user_data.create_coef_array(complete_df.coef, complete_df.key_id,
+                                complete_df.date_id, complete_df.sum_id)
 user_data.coef_arr_concat()
 user_data.print_df()
 
