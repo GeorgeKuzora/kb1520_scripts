@@ -7,7 +7,7 @@ data_list = lib.Data_list(data_file_name)
 mat_list = data_list.create_materials()
 zparts_list = data_list.create_zparts()
 
-user_data = lib.User_data(user_file_name)
+user_data = lib.User_data(user_file_name, mat_list)
 user_list = user_data.create_df()
 prdinfo = user_data.create_prdinfo()
 
@@ -28,5 +28,6 @@ for i in range(len(user_list)):
     user_data.create_coef_array(complete_df.coef, complete_df.key_id,
                                 complete_df.date_id, complete_df.sum_id)
 user_data.coef_arr_concat()
+user_data.material_data_merge()
 user_data.print_df()
 

@@ -18,7 +18,7 @@ class Data_list:
         '''Создает датафрейм из листа Эксель в котором содержатся данные о
         существующих материалах и их свойствах.'''
         with pd.ExcelFile(self.basic_file) as xlsx:
-            self.materials_df = pd.read_excel(xlsx, "material_data", na_values=["NA"], index_col=0, usecols="A:E")
+            self.materials_df = pd.read_excel(xlsx, "material_data", na_values=["NA"], index_col=0, usecols="A:F")
         return self.materials_df
 
     def create_zparts(self):
@@ -34,10 +34,11 @@ class User_data:
     а именно ВОМ материала и данные о продукте занесенные в пользовательский файл.
     Требует очистки данных пользователя'''
 
-    def __init__(self, file_name):
+    def __init__(self, file_name, material_df):
         '''Атрибут имя файла .xlsx где храняться данные разделенные по вкладкам,
         сформированныи при промощи Powerquery'''
         self.file_name = file_name
+        self.material_df = material_df
         self.coef_array = []
         self.key_id = []
         self.date_id = []
@@ -101,6 +102,25 @@ class User_data:
         self.user_df = pd.concat([self.user_df, date_id_s], axis=1)
         self.user_df = pd.concat([self.user_df, sum_id_s], axis=1)
         return self.user_df
+
+    def material_data_merge(self):
+        material_s = self.material_df["Material supply chain status"]
+        print(self.material_df.head())
+        self.user_df = pd.merge(
+                                self.user_df,
+                                material_s,
+                                how="left",
+                                on=None,
+                                left_on="Number",
+                                right_on="Material",
+                                left_index=False,
+                                right_index=True,
+                                sort=False,
+                                suffixes=("_x", "_y"),
+                                copy=True,
+                                indicator=False,
+                                validate=None,
+                                )
 
     def print_df(self):
         '''Записывает пользовательский датафрейм в новый эксель файл'''
@@ -273,7 +293,7 @@ class Complete_df:
         sum_qua_bal = self.current_query["Quantity Balance"].sum(axis=0, skipna=False)
         sum_c_con = self.current_query["C Consum"].sum(axis=0, skipna=False)
         if sum_c_con == 0 or sum_c_con is None:
-            self.coef = self.current_query["C quantity"].min(axis=0)
+            self.coef = self.current_query["C quantity"].mean(axis=0)
             if self.coef == 0:
                 self.coef = 0.01
         else:
